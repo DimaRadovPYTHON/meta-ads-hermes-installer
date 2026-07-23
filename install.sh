@@ -356,3 +356,83 @@ echo -e "${YELLOW}  Config file:${NC} $SKILL_DIR/config.yaml"
 echo -e "${YELLOW}  Credentials:${NC} $ENV_FILE"
 echo -e "${YELLOW}  Uninstall:${NC}   $SCRIPT_DIR/uninstall.sh"
 echo ""
+
+# ── Post-Install: Register onboarding job ─────────────────────────────────
+echo -e "${YELLOW}  Registering onboarding flow...${NC}"
+
+ONBOARDING_ID=$(python3 -c "import uuid; print(uuid.uuid4().hex[:12])")
+ONBOARDING_DIR="$HOME/.hermes/cron"
+mkdir -p "$ONBOARDING_DIR"
+
+python3 -c "
+import json, uuid
+from datetime import datetime, timezone, timedelta
+
+# Read existing jobs
+try:
+    with open('$ONBOARDING_DIR/jobs.json') as f:
+        data = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    data = {'jobs': []}
+
+# Create onboarding job
+onboarding_job = {
+    'id': '$ONBOARDING_ID',
+    'name': 'Meta Ads Onboarding — $CLIENT_NAME',
+    'prompt': '''You are the Meta Ads Agent onboarding assistant. Your job is to ask the client 20 questions to understand their business before running ads. Ask them ONE question at a time and wait for their response before moving to the next.
+
+The 20 questions:
+
+1. What's your business name and what do you do?
+2. What product or service are you advertising?
+3. Who is your ideal customer? (age, gender, interests)
+4. What's the main problem your product solves for them?
+5. How much does your product/service cost?
+6. What's your profit margin per sale?
+7. Do you have an existing website or landing page for conversions?
+8. What's your current monthly ad budget?
+9. Have you run Meta/Facebook ads before? If so, what results did you see?
+10. What's your target cost per acquisition (CPA) — how much are you willing to pay for a customer?
+11. Do you have existing video content or photos of your product?
+12. Who are your top 3 competitors on social media?
+13. What makes your business different from competitors?
+14. What call-to-action do you want people to take? (Buy, Sign up, Book, etc.)
+15. What geographic area do you serve?
+16. Do you have a Facebook Pixel installed on your website?
+17. What time of year is busiest for your business?
+18. What would a successful month look like for your ads?
+19. Do you have any existing ad creative (videos, images, copy) we should review?
+20. Is there anything specific about your business or industry that's important for running ads?
+
+Important: Ask ONE question at a time. Wait for the client's answer before asking the next one. Keep the conversation natural — don't sound like a robot reading from a list.''',
+    'skills': [],
+    'model': None,
+    'provider': None,
+    'base_url': None,
+    'script': None,
+    'no_agent': False,
+    'context_from': None,
+    'schedule': {
+        'kind': 'oneshot',
+        'at': (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+    },
+    'schedule_display': '1 minute after install',
+    'repeat': {'times': 1, 'completed': 0},
+    'enabled': True,
+    'state': 'scheduled',
+    'paused_at': None,
+    'paused_reason': None,
+    'created_at': datetime.now(timezone.utc).isoformat(),
+    'next_run_at': (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(),
+    'deliver': '$DELIVERY_TARGET'
+}
+
+data['jobs'].append(onboarding_job)
+
+with open('$ONBOARDING_DIR/jobs.json', 'w') as f:
+    json.dump(data, f, indent=2)
+
+print('Onboarding job registered')
+"
+echo -e "  ${GREEN}✓${NC} Onboarding flow will start in 1 minute on $DELIVERY_CHANNEL"
+echo ""
