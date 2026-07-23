@@ -1,0 +1,19 @@
+{
+  "id": "meta-ads-daily-report",
+  "name": "Meta Ads Daily Performance Report",
+  "prompt": "Fetch today's campaign performance data using the Meta Ads MCP tools. Generate a daily report covering: total spend vs budget, campaign-level ROAS/CPA/CTR, ad sets paused or activated, creative fatigue warnings, budget changes made, and recommendations for tomorrow. Keep it concise — 5-8 bullet points max. Deliver to the client's configured channel.",
+  "skills": ["meta-ads-agent"],
+  "schedule": {
+    "kind": "cron",
+    "expr": "0 9 * * *"
+  },
+  "repeat": {
+    "times": null,
+    "completed": 0
+  },
+  "enabled": true,
+  "state": "scheduled",
+  "deliver": "origin",
+  "enabled_toolsets": ["terminal", "file"],
+  "workdir": null
+}

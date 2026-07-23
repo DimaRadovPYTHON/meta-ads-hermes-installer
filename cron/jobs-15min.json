@@ -1,0 +1,21 @@
+{
+  "id": "meta-ads-campaign-check",
+  "name": "Meta Ads Campaign Check (15 min)",
+  "prompt": "Run the campaign check script and review its output. If any ad sets were paused or budgets adjusted, explain why. If there are alerts (creative fatigue, CPA breaches), summarize them. Deliver a brief status update.",
+  "skills": ["meta-ads-agent"],
+  "script": "campaign-check.py",
+  "no_agent": false,
+  "schedule": {
+    "kind": "cron",
+    "expr": "*/15 * * * *"
+  },
+  "repeat": {
+    "times": null,
+    "completed": 0
+  },
+  "enabled": true,
+  "state": "scheduled",
+  "deliver": "origin",
+  "enabled_toolsets": ["terminal", "file"],
+  "workdir": null
+}

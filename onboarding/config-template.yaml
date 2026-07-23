@@ -1,0 +1,28 @@
+# Meta Ads Agent Client Configuration
+# Copy this file to ~/.hermes/skills/business/meta-ads-agent/config.yaml
+# and fill in your client's details
+
+client:
+  name: ""                          # Client business name
+  ad_account_id: ""                 # Meta Ad Account ID (act_XXXXXXXXX)
+  target_roas: 4.0                  # Target Return on Ad Spend (e.g., 4.0 = 4x)
+  max_cpa: 20.0                     # Maximum Cost Per Acquisition ($)
+  daily_budget_cap: 100.0           # Maximum daily budget across all campaigns ($)
+  alert_only: false                 # true = alerts only, false = auto pause/scale
+  delivery_channel: "telegram"      # Where reports go: telegram, discord, email
+  delivery_target: ""               # Channel ID / email / phone number
+  webhook_url: ""                   # Webhook URL for alerts and reports (Discord, Slack, etc.)
+
+rules:
+  pause_threshold: 2.0              # Pause if CPA exceeds this multiple of target
+  scale_threshold: 1.3              # Scale if ROAS exceeds this multiple of target
+  scale_days: 3                     # Consecutive days above threshold before scaling
+  scale_increment: 0.2              # Budget increase multiplier (20%)
+  max_weekly_increase: 0.5          # Max weekly budget increase (50%)
+  fatigue_frequency: 3.5            # Frequency threshold for creative fatigue
+  fatigue_ctr_drop: 0.25            # CTR drop threshold for creative fatigue
+
+reporting:
+  daily_report_time: "09:00"        # Time for daily performance report (HH:MM)
+  timezone: "America/New_York"      # Client timezone
+  currency: "USD"                   # Currency for reporting
