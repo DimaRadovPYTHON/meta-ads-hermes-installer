@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Meta Ads Agent — Hermes Installer
 # One-command setup for deploying the Meta Ads Agent into Hermes
+# Uses Meta's official MCP Server (mcp.facebook.com/ads)
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RED='\033[0;31m'
@@ -38,7 +39,6 @@ while [ -z "$VALID_CODE" ]; do
         continue
     fi
 
-    # Validate against clients.json
     CLIENT_NAME=$(python3 -c "
 import json, sys
 with open('$CLIENTS_FILE') as f:
@@ -64,7 +64,6 @@ done
 
 echo -e "${YELLOW}[2/6] Checking prerequisites...${NC}"
 
-# Check Hermes binary
 if command -v hermes &>/dev/null; then
     echo -e "  ${GREEN}✓${NC} Hermes found: $(which hermes)"
 else
@@ -73,19 +72,10 @@ else
     exit 1
 fi
 
-# Check Hermes config directory
 if [ -d "$HOME/.hermes" ]; then
     echo -e "  ${GREEN}✓${NC} Hermes config found: ~/.hermes/"
 else
-    echo -e "  ${RED}✗${NC} ~/.hermes/ not found. Run Hermes setup first."
-    exit 1
-fi
-
-# Check Python3
-if command -v python3 &>/dev/null; then
-    echo -e "  ${GREEN}✓${NC} Python3 found: $(python3 --version)"
-else
-    echo -e "  ${RED}✗${NC} Python3 not found. Please install Python 3.11+."
+    echo -e "  ${RED}✗${NC} ~/.hermes/ not found. Run 'hermes setup' first."
     exit 1
 fi
 
@@ -102,6 +92,7 @@ if [ -d "$SKILL_DIR" ]; then
     if [[ "$overwrite" != "y" && "$overwrite" != "Y" ]]; then
         echo "  Skipping skill installation."
     else
+        mkdir -p "$HOME/.hermes/skills/business"
         cp -r "$SCRIPT_DIR/skills/business/meta-ads-agent" "$HOME/.hermes/skills/business/"
         echo -e "  ${GREEN}✓${NC} Skills overwritten"
     fi
@@ -111,48 +102,32 @@ else
     echo -e "  ${GREEN}✓${NC} Skills installed to $SKILL_DIR"
 fi
 
-# Make scripts executable
 chmod +x "$SKILL_DIR/scripts/"*.py 2>/dev/null || true
 echo ""
 
-# ── Install MCP Server ─────────────────────────────────────────────────────
+# ── Configure Meta MCP Server ──────────────────────────────────────────────
 
-echo -e "${YELLOW}[4/6] Installing Meta Ads MCP server...${NC}"
+echo -e "${YELLOW}[4/6] Configuring Meta Ads MCP Server...${NC}"
+echo -e "  Using Meta's official MCP: mcp.facebook.com/ads"
+echo -e "  ${YELLOW}⚠${NC} You'll need to authenticate via browser when first used."
+echo ""
 
-MCP_DIR="$SCRIPT_DIR/meta-ads-mcp-server"
-MCP_TARGET="$HOME/.hermes/meta-ads-mcp-server"
-
-# Install python dependencies
-echo -e "  Installing Python dependencies..."
-pip3 install -r "$MCP_DIR/requirements.txt" 2>/dev/null || pip install -r "$MCP_DIR/requirements.txt" 2>/dev/null || {
-    echo -e "  ${YELLOW}⚠${NC} Could not auto-install facebook-business SDK"
-    echo "    Install manually: pip3 install facebook-business>=19.0.0"
-}
-
-# Copy server files
-mkdir -p "$MCP_TARGET"
-cp "$MCP_DIR/server.py" "$MCP_TARGET/"
-cp "$MCP_DIR/requirements.txt" "$MCP_TARGET/"
-echo -e "  ${GREEN}✓${NC} MCP server files copied to $MCP_TARGET"
-
-# Add MCP config to Hermes config.yaml
-CONFIG_FILE="$HOME/.hermes/config.yaml"
-MCP_CONFIG="
+# Add Meta MCP via Hermes MCP management
+hermes mcp add meta-ads --url "https://mcp.facebook.com/ads" 2>/dev/null || {
+    # Fallback: manual config.yaml entry
+    CONFIG_FILE="$HOME/.hermes/config.yaml"
+    MCP_ENTRY="
   meta-ads:
-    command: python3 $MCP_TARGET/server.py
+    url: https://mcp.facebook.com/ads
     enabled: true"
 
-if grep -q "meta-ads:" "$CONFIG_FILE" 2>/dev/null; then
-    echo -e "  ${YELLOW}⚠${NC} MCP config for meta-ads already exists in config.yaml"
-else
-    # Insert before the last mcp_servers entry or at end of mcp_servers section
-    python3 -c "
-import re
+    if grep -q "meta-ads:" "$CONFIG_FILE" 2>/dev/null; then
+        echo -e "  ${YELLOW}⚠${NC} MCP config for meta-ads already exists in config.yaml"
+    else
+        python3 -c "
 with open('$CONFIG_FILE') as f:
     content = f.read()
-# Find mcp_servers section and add after it
 if 'mcp_servers:' in content:
-    # Add our server after the last existing MCP server
     lines = content.split('\n')
     result = []
     added = False
@@ -164,28 +139,29 @@ if 'mcp_servers:' in content:
             in_mcp = True
             indent = line[:len(line) - len(line.lstrip())]
         elif in_mcp and line.strip() and not line.startswith(' ') and not line.startswith('#'):
-            # End of mcp_servers section reached
             if not added:
                 result.append(indent + '  meta-ads:')
-                result.append(indent + '    command: python3 $MCP_TARGET/server.py')
+                result.append(indent + '    url: https://mcp.facebook.com/ads')
                 result.append(indent + '    enabled: true')
                 added = True
             in_mcp = False
     if in_mcp and not added:
-        # mcp_servers was the last section
         result.append(indent + '  meta-ads:')
-        result.append(indent + '    command: python3 $MCP_TARGET/server.py')
+        result.append(indent + '    url: https://mcp.facebook.com/ads')
         result.append(indent + '    enabled: true')
     content = '\n'.join(result)
     with open('$CONFIG_FILE', 'w') as f:
         f.write(content)
     print('MCP config added')
 " || echo -e "  ${YELLOW}⚠${NC} Could not auto-edit config.yaml. Add manually:"
-    echo "    Add to ~/.hermes/config.yaml under mcp_servers:"
-    echo "      meta-ads:"
-    echo "        command: python3 $MCP_TARGET/server.py"
-    echo "        enabled: true"
-fi
+        echo "    Under mcp_servers: in ~/.hermes/config.yaml:"
+        echo "      meta-ads:"
+        echo "        url: https://mcp.facebook.com/ads"
+        echo "        enabled: true"
+    fi
+}
+
+echo -e "  ${GREEN}✓${NC} Meta Ads MCP configured"
 echo ""
 
 # ── Interactive Onboarding ─────────────────────────────────────────────────
@@ -193,44 +169,14 @@ echo ""
 echo -e "${YELLOW}[5/6] Client onboarding...${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo "  Let's configure your Meta Ads Agent."
-echo "  You'll need: Meta App credentials + Ad Account ID"
+echo "  You'll need: Your Meta Ad Account ID"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-
-# Meta App ID
-while true; do
-    read -rp "  Meta App ID: " META_APP_ID
-    if [ -n "$META_APP_ID" ]; then
-        break
-    fi
-    echo -e "  ${RED}App ID cannot be empty${NC}"
-done
-
-# Meta App Secret
-while true; do
-    read -rsp "  Meta App Secret (hidden): " META_APP_SECRET
-    echo ""
-    if [ -n "$META_APP_SECRET" ]; then
-        break
-    fi
-    echo -e "  ${RED}App Secret cannot be empty${NC}"
-done
-
-# Access Token
-while true; do
-    read -rsp "  Meta Access Token (hidden): " META_ADS_TOKEN
-    echo ""
-    if [ -n "$META_ADS_TOKEN" ]; then
-        break
-    fi
-    echo -e "  ${RED}Token cannot be empty${NC}"
-done
 
 # Ad Account ID
 while true; do
     read -rp "  Ad Account ID (e.g., act_123456789): " META_ACCOUNT_ID
     if [ -n "$META_ACCOUNT_ID" ]; then
-        # Normalize: add act_ prefix if missing
         if [[ "$META_ACCOUNT_ID" != act_* ]]; then
             META_ACCOUNT_ID="act_$META_ACCOUNT_ID"
         fi
@@ -247,80 +193,59 @@ TARGET_ROAS=${TARGET_ROAS:-4.0}
 read -rp "  Max CPA in \$ (default: 20): " MAX_CPA
 MAX_CPA=${MAX_CPA:-20}
 
+# Daily budget cap
+read -rp "  Daily budget cap in \$ (default: 100): " DAILY_BUDGET_CAP
+DAILY_BUDGET_CAP=${DAILY_BUDGET_CAP:-100}
+
 # Delivery channel
 echo ""
 echo "  Delivery channel for reports:"
-echo "    1) Telegram"
-echo "    2) Discord"
+echo "    1) Discord"
+echo "    2) Telegram"
 echo "    3) Email"
 read -rp "  Choice [1-3] (default: 1): " CHANNEL_CHOICE
 case ${CHANNEL_CHOICE:-1} in
-    1) DELIVERY_CHANNEL="telegram" ;;
-    2) DELIVERY_CHANNEL="discord" ;;
+    1) DELIVERY_CHANNEL="discord" ;;
+    2) DELIVERY_CHANNEL="telegram" ;;
     3) DELIVERY_CHANNEL="email" ;;
-    *) DELIVERY_CHANNEL="telegram" ;;
+    *) DELIVERY_CHANNEL="discord" ;;
 esac
 echo -e "  ${GREEN}✓${NC} Delivery channel: $DELIVERY_CHANNEL"
 
 # Delivery target
-read -rp "  Delivery target (chat ID / email / phone): " DELIVERY_TARGET
+read -rp "  Delivery target (Discord channel ID / Telegram chat ID / email): " DELIVERY_TARGET
 DELIVERY_TARGET=${DELIVERY_TARGET:-"origin"}
 
 # Mode
 echo ""
 echo "  Operating mode:"
-echo "    1) Auto mode — pauses underperformers, scales winners automatically"
-echo "    2) Alert-only mode — sends alerts, requires manual action"
+echo "    1) Alert-only mode — sends alerts, requires manual action (recommended for first 48hrs)"
+echo "    2) Auto mode — pauses underperformers, scales winners automatically"
 read -rp "  Choice [1-2] (default: 1): " MODE_CHOICE
 case ${MODE_CHOICE:-1} in
-    1) ALERT_ONLY="false" ;;
-    2) ALERT_ONLY="true" ;;
-    *) ALERT_ONLY="false" ;;
+    1) ALERT_ONLY="true" ;;
+    2) ALERT_ONLY="false" ;;
+    *) ALERT_ONLY="true" ;;
 esac
-echo -e "  ${GREEN}✓${NC} Auto mode: $([[ $ALERT_ONLY == "false" ]] && echo "enabled" || echo "alerts only")"
+echo -e "  ${GREEN}✓${NC} Mode: $([[ $ALERT_ONLY == "true" ]] && echo "alerts only" || echo "auto")"
 
-# Webhook URL
-echo ""
-echo "  Webhook URL for alerts and reports:"
-echo "    (Discord webhook, Slack webhook, or any HTTP endpoint)"
-echo "    Leave empty to skip — the agent can set it up later."
-read -rp "  Webhook URL: " WEBHOOK_URL
-if [ -n "$WEBHOOK_URL" ]; then
-    echo -e "  ${GREEN}✓${NC} Webhook registered"
-else
-    echo -e "  ${YELLOW}⚠${NC} No webhook set — alerts will go through the agent's chat"
-fi
-
-# ── Save Credentials ───────────────────────────────────────────────────────
+# ── Save Configuration ─────────────────────────────────────────────────────
 
 echo ""
 echo -e "${YELLOW}[6/6] Saving configuration...${NC}"
 
-# Append to .env
-ENV_FILE="$HOME/.hermes/.env"
-{
-    echo ""
-    echo "# Meta Ads Agent credentials (added $(date))"
-    echo "META_ADS_APP_ID=$META_APP_ID"
-    echo "META_ADS_APP_SECRET=$META_APP_SECRET"
-    echo "META_ADS_TOKEN=$META_ADS_TOKEN"
-    echo "META_ADS_ACCOUNT_ID=$META_ACCOUNT_ID"
-} >> "$ENV_FILE"
-echo -e "  ${GREEN}✓${NC} Credentials saved to $ENV_FILE"
-
-# Save config
 CONFIG_FILE_SKILL="$SKILL_DIR/config.yaml"
 cat > "$CONFIG_FILE_SKILL" << EOF
 # Meta Ads Agent — Client Config
 client:
-  name: "$META_ACCOUNT_ID"
+  name: "$CLIENT_NAME"
   ad_account_id: "$META_ACCOUNT_ID"
   target_roas: $TARGET_ROAS
   max_cpa: $MAX_CPA
+  daily_budget_cap: $DAILY_BUDGET_CAP
   alert_only: $ALERT_ONLY
   delivery_channel: "$DELIVERY_CHANNEL"
   delivery_target: "$DELIVERY_TARGET"
-  webhook_url: "$WEBHOOK_URL"
 
 rules:
   pause_threshold: 2.0
@@ -336,7 +261,7 @@ reporting:
   timezone: "America/New_York"
   currency: "USD"
 EOF
-echo -e "  ${GREEN}✓${NC} Client config saved"
+echo -e "  ${GREEN}✓${NC} Client config saved to $CONFIG_FILE_SKILL"
 
 echo ""
 echo -e "${GREEN}======================================${NC}"
@@ -344,16 +269,16 @@ echo -e "${GREEN}  ✅ Meta Ads Agent installed!${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo ""
 echo "  What's next:"
-echo "  1. The MCP server is ready — Hermes can now call Meta Ads tools"
-echo "  2. Ask the agent to set up a campaign check schedule:"
-echo "     'Set up a 15-min campaign check for my ads'"
+echo "  1. Authenticate Meta MCP when prompted — the first time you"
+echo "     ask the agent to check campaigns, it will open a browser"
+echo "     for Meta OAuth login."
+echo "  2. The agent will start with a 48-hour alert-only period."
 echo "  3. Test the connection:"
-echo "     'Use the Meta Ads MCP server to list my campaigns'"
-echo "  4. To send alerts, the agent can use the send_webhook tool"
-echo "  5. 48-hour test period recommended before trusting auto-mode"
+echo "     'Use the Meta Ads MCP to list my campaigns'"
+echo "  4. To set up the 15-minute check schedule:"
+echo "     'Set up a 15-min campaign check for my ads'"
 echo ""
 echo -e "${YELLOW}  Config file:${NC} $SKILL_DIR/config.yaml"
-echo -e "${YELLOW}  Credentials:${NC} $ENV_FILE"
 echo -e "${YELLOW}  Uninstall:${NC}   $SCRIPT_DIR/uninstall.sh"
 echo ""
 
@@ -368,14 +293,12 @@ python3 -c "
 import json, uuid
 from datetime import datetime, timezone, timedelta
 
-# Read existing jobs
 try:
     with open('$ONBOARDING_DIR/jobs.json') as f:
         data = json.load(f)
 except (FileNotFoundError, json.JSONDecodeError):
     data = {'jobs': []}
 
-# Create onboarding job
 onboarding_job = {
     'id': '$ONBOARDING_ID',
     'name': 'Meta Ads Onboarding — $CLIENT_NAME',
@@ -404,11 +327,10 @@ The 20 questions:
 19. Do you have any existing ad creative (videos, images, copy) we should review?
 20. Is there anything specific about your business or industry that's important for running ads?
 
-Important: Ask ONE question at a time. Wait for the client's answer before asking the next one. Keep the conversation natural — don't sound like a robot reading from a list.''',
-    'skills': [],
+Important: Ask ONE question at a time. Wait for the client's answer before asking the next one. Keep the conversation natural.''',
+    'skills': ['meta-ads-agent'],
     'model': None,
     'provider': None,
-    'base_url': None,
     'script': None,
     'no_agent': False,
     'context_from': None,
@@ -420,8 +342,6 @@ Important: Ask ONE question at a time. Wait for the client's answer before askin
     'repeat': {'times': 1, 'completed': 0},
     'enabled': True,
     'state': 'scheduled',
-    'paused_at': None,
-    'paused_reason': None,
     'created_at': datetime.now(timezone.utc).isoformat(),
     'next_run_at': (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat(),
     'deliver': '$DELIVERY_TARGET'

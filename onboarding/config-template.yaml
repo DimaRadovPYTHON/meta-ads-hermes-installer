@@ -8,10 +8,9 @@ client:
   target_roas: 4.0                  # Target Return on Ad Spend (e.g., 4.0 = 4x)
   max_cpa: 20.0                     # Maximum Cost Per Acquisition ($)
   daily_budget_cap: 100.0           # Maximum daily budget across all campaigns ($)
-  alert_only: false                 # true = alerts only, false = auto pause/scale
-  delivery_channel: "telegram"      # Where reports go: telegram, discord, email
-  delivery_target: ""               # Channel ID / email / phone number
-  webhook_url: ""                   # Webhook URL for alerts and reports (Discord, Slack, etc.)
+  alert_only: true                  # true = alerts only (48hr test), false = auto
+  delivery_channel: "discord"       # Where reports go: discord, telegram, email
+  delivery_target: ""               # Channel ID / chat ID / email address
 
 rules:
   pause_threshold: 2.0              # Pause if CPA exceeds this multiple of target

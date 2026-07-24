@@ -59,11 +59,11 @@ if [ -f "$CONFIG_FILE" ]; then
 import re
 with open('$CONFIG_FILE') as f:
     content = f.read()
-# Remove the meta-ads MCP server section
-content = re.sub(r'\n  meta-ads:.*?\n  enabled: true', '', content)
+# Remove the meta-ads MCP server section (custom or official MCP format)
+content = re.sub(r'\\n  meta-ads:.*?(?:enabled: true|enabled: false)', '', content)
 with open('$CONFIG_FILE', 'w') as f:
     f.write(content)
-print('MCP server config removed')
+print('MCP config removed')
 " && echo -e "${GREEN}✓ MCP config cleaned${NC}" || echo -e "${RED}✗ Failed to clean MCP config${NC}"
 else
     echo "  Config file not found — skipping"
@@ -87,5 +87,4 @@ fi
 
 echo ""
 echo -e "${GREEN}✓ Meta Ads Agent uninstalled successfully${NC}"
-echo "  Note: facebook-business Python package is still installed."
-echo "  Remove it manually: pip3 uninstall facebook-business"
+echo '  Note: Remove MCP config with: hermes mcp remove meta-ads'

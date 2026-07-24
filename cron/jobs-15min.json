@@ -1,10 +1,8 @@
 {
   "id": "meta-ads-campaign-check",
   "name": "Meta Ads Campaign Check (15 min)",
-  "prompt": "Run the campaign check script and review its output. If any ad sets were paused or budgets adjusted, explain why. If there are alerts (creative fatigue, CPA breaches), summarize them. Deliver a brief status update.",
+  "prompt": "Use the Meta Ads MCP tools to check all active campaigns for the account configured in the meta-ads-agent skill config. Run through each rule: check CPA thresholds, ROAS targets, creative fatigue, budget pacing, and learning phase status. If you find any issues (ad sets that need pausing, winners to scale, fatigued creatives), report which ones and why. Keep the response concise — focus on what changed since the last check. If nothing changed, just say 'All clear' with spend summary.",
   "skills": ["meta-ads-agent"],
-  "script": "campaign-check.py",
-  "no_agent": false,
   "schedule": {
     "kind": "cron",
     "expr": "*/15 * * * *"
